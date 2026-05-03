@@ -1,67 +1,105 @@
 import nmap
+import subprocess
+import ipaddress
+import re
+import time
+import os
 
-def ping_scan(ip_range):
+# =========================
+# ✨ K M T TYPING LOGO
+# =========================
+def logo():
+    text = """
+██╗  ██╗     ███╗   ███╗     ████████╗
+██║ ██╔╝     ████╗ ████║     ╚══██╔══╝
+█████╔╝█████╗██╔████╔██║█████╗  ██║   
+██╔═██╗╚════╝██║╚██╔╝██║╚════╝  ██║   
+██║  ██╗     ██║ ╚═╝ ██║        ██║   
+╚═╝  ╚═╝     ╚═╝     ╚═╝        ╚═╝   
+        🛠 K M T NETWORK TOOL 🛠
+"""
+    for line in text.split("\n"):
+        print(line)
+        time.sleep(0.05)
+
+
+# =========================
+# 🌐 AUTO IP RANGE
+# =========================
+def get_ip_range():
+    result = subprocess.getoutput("ip a show wlan0")
+    ip_match = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", result)
+
+    if not ip_match:
+        print("[-] Cannot detect IP!")
+        exit()
+
+    ip = ip_match.group(1)
+    print(f"[+] Your IP: {ip}")
+
+    network = ipaddress.IPv4Interface(ip + "/24").network
+    return str(network)
+
+
+# =========================
+# 🔍 NETWORK SCAN
+# =========================
+def scan_network(ip_range):
     nm = nmap.PortScanner()
-    print(f"\n[+] Scanning network: {ip_range}\n")
+    print(f"\n[+] Scanning: {ip_range}\n")
 
     nm.scan(hosts=ip_range, arguments='-sn')
 
-    for host in nm.all_hosts():
-        print("=================================")
-        print(f"IP: {host}")
-        print(f"State: {nm[host].state()}")
+    results = []
 
-        try:
-            mac = nm[host]['addresses'].get('mac', 'Unknown')
-            print(f"MAC: {mac}")
-        except:
-            print("MAC: Unknown")
+    for host in nm.all_hosts():
+        ip = host
+        state = nm[host].state()
+        mac = nm[host]['addresses'].get('mac', 'Unknown')
+
+        print("=================================")
+        print(f"IP   : {ip}")
+        print(f"State: {state}")
+        print(f"MAC  : {mac}")
+
+        results.append(f"{ip} | {state} | {mac}")
 
     print("=================================")
 
+    # save file
+    with open("scan_result.txt", "w") as f:
+        f.write("\n".join(results))
 
-def port_scan(target):
-    nm = nmap.PortScanner()
-    print(f"\n[+] Scanning ports on: {target}\n")
-
-    nm.scan(target, arguments='-F')  # Fast scan (top ports)
-
-    for host in nm.all_hosts():
-        print("=================================")
-        print(f"Host: {host}")
-
-        for proto in nm[host].all_protocols():
-            ports = nm[host][proto].keys()
-            for port in ports:
-                state = nm[host][proto][port]['state']
-                print(f"Port {port}: {state}")
-
-    print("=================================")
+    print("\n[✓] Saved to scan_result.txt")
 
 
-def main():
+# =========================
+# 📋 MENU
+# =========================
+def menu():
     while True:
-        print("\n==== Network Tool Menu ====")
-        print("1. Scan network (devices)")
-        print("2. Scan ports (single IP)")
-        print("3. Exit")
+        print("\n====== K M T PRO TOOL ======")
+        print("1. Auto Network Scan")
+        print("2. Exit")
 
-        choice = input("Select option: ")
+        choice = input("Select: ")
 
         if choice == "1":
-            ip_range = input("Enter IP range (e.g. 192.168.100.0/24): ")
-            ping_scan(ip_range)
+            ip_range = get_ip_range()
+            scan_network(ip_range)
 
         elif choice == "2":
-            target = input("Enter target IP (e.g. 192.168.100.1): ")
-            port_scan(target)
-
-        elif choice == "3":
             print("Bye 👋")
             break
 
         else:
-            print("Invalid choice!")
+            print("Invalid option!")
 
+
+# =========================
+# 🚀 RUN
+# =========================
 if __name__ == "__main__":
-    main()
+    os.system("clear")
+    logo()
+    menu()
