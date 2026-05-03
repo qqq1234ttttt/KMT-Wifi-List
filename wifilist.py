@@ -1,9 +1,11 @@
 import nmap
-import subprocess
+import socket
 import ipaddress
-import re
-import os
 import time
+import os
+from datetime import datetime
+
+KNOWN = set()
 
 # =========================
 # 🎨 LOGO
@@ -16,70 +18,98 @@ def logo():
 ██╔═██╗╚════╝██║╚██╔╝██║╚════╝  ██║   
 ██║  ██╗     ██║ ╚═╝ ██║        ██║   
 ╚═╝  ╚═╝     ╚═╝     ╚═╝        ╚═╝   
-        ⚡ K M T STABLE v2 ⚡
+     ⚡ K M T FINAL ULTRA STABLE ⚡
 """)
 
 # =========================
-# 🌐 SAFE IP DETECT (FIXED)
+# 🌐 SAFE IP DETECT (BEST METHOD)
 # =========================
 def get_ip_range():
-    cmd = "ip route | grep src"
-    out = subprocess.getoutput(cmd)
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
 
-    match = re.search(r"src (\d+\.\d+\.\d+\.\d+)", out)
+        print(f"[+] Detected IP: {ip}")
 
-    if not match:
-        print("[-] Cannot detect real WiFi IP!")
-        print(out)
+        net = ".".join(ip.split(".")[:3]) + ".0/24"
+        return net
+
+    except:
+        print("[-] IP detection failed!")
         exit()
 
-    ip = match.group(1)
-
-    # ❌ block loopback / invalid
-    if ip.startswith("127.") or ip.startswith("169.254"):
-        print("[-] Invalid network detected (loopback/APIPA)")
-        exit()
-
-    print(f"[+] Real WiFi IP: {ip}")
-
-    net = ipaddress.IPv4Interface(ip + "/24").network
-    return str(net)
-
 # =========================
-# 🔍 SCAN (FILTERED)
+# 🔍 SCAN NETWORK
 # =========================
-def scan_network(ip_range):
+def scan(ip_range):
     nm = nmap.PortScanner()
-
-    print(f"\n[+] Scanning: {ip_range}\n")
-
     nm.scan(hosts=ip_range, arguments='-sn')
 
+    devices = []
+
     for host in nm.all_hosts():
-
-        # ❌ skip fake localhost
-        if host.startswith("127."):
-            continue
-
-        state = nm[host].state()
         mac = nm[host]['addresses'].get('mac', 'Unknown')
+        devices.append((host, mac))
 
-        print("=================================")
-        print(f"IP   : {host}")
-        print(f"State: {state}")
-        print(f"MAC  : {mac}")
+    return devices
 
-    print("=================================")
+# =========================
+# 🔔 ALERT SYSTEM
+# =========================
+def alert(devices):
+    global KNOWN
+
+    for ip, mac in devices:
+        if mac != "Unknown" and mac not in KNOWN:
+            print(f"\n⚠️ NEW DEVICE: {ip} | {mac}")
+            KNOWN.add(mac)
+
+# =========================
+# 💾 LOG SAVE
+# =========================
+def save(devices):
+    with open("kmt_final_log.txt", "a") as f:
+        f.write(f"\n=== {datetime.now()} ===\n")
+        for ip, mac in devices:
+            f.write(f"{ip} | {mac}\n")
+
+# =========================
+# 🔁 LIVE MONITOR
+# =========================
+def live():
+    ip_range = get_ip_range()
+
+    print(f"[+] Monitoring: {ip_range}\n")
+
+    try:
+        while True:
+            devices = scan(ip_range)
+
+            os.system("clear")
+            logo()
+
+            print(f"[LIVE] {datetime.now()}")
+            print("=================================")
+
+            for ip, mac in devices:
+                print(f"IP: {ip} | MAC: {mac}")
+
+            print("=================================")
+
+            alert(devices)
+            save(devices)
+
+            time.sleep(5)
+
+    except KeyboardInterrupt:
+        print("\n[✓] Stopped safely")
 
 # =========================
 # 🚀 RUN
 # =========================
-def main():
+if __name__ == "__main__":
     os.system("clear")
     logo()
-
-    ip_range = get_ip_range()
-    scan_network(ip_range)
-
-if __name__ == "__main__":
-    main()
+    live()
