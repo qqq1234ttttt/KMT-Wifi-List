@@ -1,11 +1,12 @@
 import nmap
 import socket
 import ipaddress
-import time
+import subprocess
+import re
 import os
+import time
+import requests
 from datetime import datetime
-
-KNOWN = set()
 
 # =========================
 # 🎨 LOGO
@@ -18,11 +19,11 @@ def logo():
 ██╔═██╗╚════╝██║╚██╔╝██║╚════╝  ██║   
 ██║  ██╗     ██║ ╚═╝ ██║        ██║   
 ╚═╝  ╚═╝     ╚═╝     ╚═╝        ╚═╝   
-     ⚡ K M T FINAL ULTRA STABLE ⚡
+   ⚡ K M T DEVICE MONITOR ⚡
 """)
 
 # =========================
-# 🌐 SAFE IP DETECT (BEST METHOD)
+# 🌐 GET IP (SAFE)
 # =========================
 def get_ip_range():
     try:
@@ -31,85 +32,91 @@ def get_ip_range():
         ip = s.getsockname()[0]
         s.close()
 
-        print(f"[+] Detected IP: {ip}")
+        print(f"[+] Your IP: {ip}")
 
-        net = ".".join(ip.split(".")[:3]) + ".0/24"
-        return net
+        return ".".join(ip.split(".")[:3]) + ".0/24"
 
     except:
-        print("[-] IP detection failed!")
+        print("[-] Cannot detect IP")
         exit()
+
+# =========================
+# 🧠 DEVICE NAME (VENDOR DETECT)
+# =========================
+def get_vendor(mac):
+    try:
+        if mac == "Unknown":
+            return "Unknown Device"
+
+        url = f"https://api.macvendors.com/{mac}"
+        res = requests.get(url, timeout=3)
+
+        if res.status_code == 200:
+            return res.text
+        else:
+            return "Unknown Device"
+
+    except:
+        return "Unknown Device"
 
 # =========================
 # 🔍 SCAN NETWORK
 # =========================
-def scan(ip_range):
+def scan_network(ip_range):
     nm = nmap.PortScanner()
     nm.scan(hosts=ip_range, arguments='-sn')
 
     devices = []
 
     for host in nm.all_hosts():
+        if host.startswith("127."):
+            continue
+
         mac = nm[host]['addresses'].get('mac', 'Unknown')
-        devices.append((host, mac))
+        vendor = get_vendor(mac)
+
+        devices.append((host, mac, vendor))
 
     return devices
 
 # =========================
-# 🔔 ALERT SYSTEM
+# 📊 SHOW RESULTS
 # =========================
-def alert(devices):
-    global KNOWN
+def show(devices):
+    os.system("clear")
+    logo()
 
-    for ip, mac in devices:
-        if mac != "Unknown" and mac not in KNOWN:
-            print(f"\n⚠️ NEW DEVICE: {ip} | {mac}")
-            KNOWN.add(mac)
+    print(f"[LIVE] {datetime.now()}")
+    print("=================================")
 
-# =========================
-# 💾 LOG SAVE
-# =========================
-def save(devices):
-    with open("kmt_final_log.txt", "a") as f:
-        f.write(f"\n=== {datetime.now()} ===\n")
-        for ip, mac in devices:
-            f.write(f"{ip} | {mac}\n")
+    for ip, mac, vendor in devices:
+        print(f"IP     : {ip}")
+        print(f"MAC    : {mac}")
+        print(f"Device : {vendor}")
+        print("---------------------------------")
 
 # =========================
-# 🔁 LIVE MONITOR
+# 🚀 RUN LOOP
 # =========================
-def live():
+def main():
+    os.system("clear")
+    logo()
+
     ip_range = get_ip_range()
 
-    print(f"[+] Monitoring: {ip_range}\n")
+    print(f"[+] Scanning: {ip_range}\n")
 
     try:
         while True:
-            devices = scan(ip_range)
-
-            os.system("clear")
-            logo()
-
-            print(f"[LIVE] {datetime.now()}")
-            print("=================================")
-
-            for ip, mac in devices:
-                print(f"IP: {ip} | MAC: {mac}")
-
-            print("=================================")
-
-            alert(devices)
-            save(devices)
-
+            devices = scan_network(ip_range)
+            show(devices)
             time.sleep(5)
 
     except KeyboardInterrupt:
         print("\n[✓] Stopped safely")
 
 # =========================
-# 🚀 RUN
+# START
 # =========================
 if __name__ == "__main__":
-    os.system("clear")
-    logo()
-    live()
+    main()
