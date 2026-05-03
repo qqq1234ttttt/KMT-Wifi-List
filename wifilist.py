@@ -4,9 +4,6 @@ import ipaddress
 import re
 import os
 import time
-from datetime import datetime
-
-KNOWN_DEVICES = set()
 
 # =========================
 # 🎨 LOGO
@@ -19,130 +16,70 @@ def logo():
 ██╔═██╗╚════╝██║╚██╔╝██║╚════╝  ██║   
 ██║  ██╗     ██║ ╚═╝ ██║        ██║   
 ╚═╝  ╚═╝     ╚═╝     ╚═╝        ╚═╝   
-   ⚡ K M T ULTIMATE PRO MONITOR ⚡
+        ⚡ K M T STABLE v2 ⚡
 """)
 
 # =========================
-# 🌐 GET IP RANGE (ULTRA STABLE)
+# 🌐 SAFE IP DETECT (FIXED)
 # =========================
 def get_ip_range():
-    cmds = ["ip route", "ifconfig", "ip a"]
-    ip = None
+    cmd = "ip route | grep src"
+    out = subprocess.getoutput(cmd)
 
-    for c in cmds:
-        out = subprocess.getoutput(c)
+    match = re.search(r"src (\d+\.\d+\.\d+\.\d+)", out)
 
-        match = re.search(r"src (\d+\.\d+\.\d+\.\d+)", out)
-        if not match:
-            match = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", out)
-
-        if match:
-            ip = match.group(1)
-            break
-
-    if not ip:
-        print("[-] Cannot detect IP!")
+    if not match:
+        print("[-] Cannot detect real WiFi IP!")
+        print(out)
         exit()
 
-    print(f"[+] Device IP: {ip}")
+    ip = match.group(1)
+
+    # ❌ block loopback / invalid
+    if ip.startswith("127.") or ip.startswith("169.254"):
+        print("[-] Invalid network detected (loopback/APIPA)")
+        exit()
+
+    print(f"[+] Real WiFi IP: {ip}")
 
     net = ipaddress.IPv4Interface(ip + "/24").network
     return str(net)
 
 # =========================
-# 🔍 SCAN NETWORK
+# 🔍 SCAN (FILTERED)
 # =========================
 def scan_network(ip_range):
     nm = nmap.PortScanner()
+
+    print(f"\n[+] Scanning: {ip_range}\n")
+
     nm.scan(hosts=ip_range, arguments='-sn')
 
-    devices = []
-
     for host in nm.all_hosts():
-        ip = host
+
+        # ❌ skip fake localhost
+        if host.startswith("127."):
+            continue
+
         state = nm[host].state()
         mac = nm[host]['addresses'].get('mac', 'Unknown')
 
-        devices.append((ip, mac))
+        print("=================================")
+        print(f"IP   : {host}")
+        print(f"State: {state}")
+        print(f"MAC  : {mac}")
 
-    return devices
-
-# =========================
-# 🔔 ALERT SYSTEM
-# =========================
-def check_devices(devices):
-    global KNOWN_DEVICES
-
-    for ip, mac in devices:
-        if mac != "Unknown" and mac not in KNOWN_DEVICES:
-            print(f"\n⚠️ NEW DEVICE DETECTED: {ip} | {mac}")
-            KNOWN_DEVICES.add(mac)
-
-# =========================
-# 💾 SAVE LOG
-# =========================
-def save_log(devices):
-    with open("kmt_live_log.txt", "a") as f:
-        f.write(f"\n=== {datetime.now()} ===\n")
-        for ip, mac in devices:
-            f.write(f"{ip} | {mac}\n")
-
-# =========================
-# 🔁 LIVE MONITOR
-# =========================
-def live_monitor():
-    ip_range = get_ip_range()
-
-    print("\n[+] Starting Live Monitor... (Ctrl+C to stop)\n")
-
-    try:
-        while True:
-            devices = scan_network(ip_range)
-
-            os.system("clear")
-            logo()
-
-            print(f"[LIVE SCAN] {datetime.now()}")
-            print("=================================")
-
-            for ip, mac in devices:
-                print(f"IP: {ip} | MAC: {mac}")
-
-            print("=================================")
-
-            check_devices(devices)
-            save_log(devices)
-
-            time.sleep(5)
-
-    except KeyboardInterrupt:
-        print("\n[✓] Stopped Monitor")
-
-# =========================
-# 📋 MENU
-# =========================
-def menu():
-    while True:
-        print("\n====== K M T ULTIMATE PRO ======")
-        print("1. Live Network Monitor")
-        print("2. Exit")
-
-        c = input("Select: ")
-
-        if c == "1":
-            live_monitor()
-
-        elif c == "2":
-            print("Bye 👋")
-            break
-
-        else:
-            print("Invalid!")
+    print("=================================")
 
 # =========================
 # 🚀 RUN
 # =========================
-if __name__ == "__main__":
+def main():
     os.system("clear")
     logo()
-    menu()
+
+    ip_range = get_ip_range()
+    scan_network(ip_range)
+
+if __name__ == "__main__":
+    main()
