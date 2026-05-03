@@ -2,99 +2,142 @@ import nmap
 import subprocess
 import ipaddress
 import re
-import time
 import os
+import time
+from datetime import datetime
+
+KNOWN_DEVICES = set()
 
 # =========================
-# ✨ K M T TYPING LOGO
+# 🎨 LOGO
 # =========================
 def logo():
-    text = """
+    print("""
 ██╗  ██╗     ███╗   ███╗     ████████╗
 ██║ ██╔╝     ████╗ ████║     ╚══██╔══╝
 █████╔╝█████╗██╔████╔██║█████╗  ██║   
 ██╔═██╗╚════╝██║╚██╔╝██║╚════╝  ██║   
 ██║  ██╗     ██║ ╚═╝ ██║        ██║   
 ╚═╝  ╚═╝     ╚═╝     ╚═╝        ╚═╝   
-        🛠 K M T NETWORK TOOL 🛠
-"""
-    for line in text.split("\n"):
-        print(line)
-        time.sleep(0.05)
-
+   ⚡ K M T ULTIMATE PRO MONITOR ⚡
+""")
 
 # =========================
-# 🌐 AUTO IP RANGE
+# 🌐 GET IP RANGE (ULTRA STABLE)
 # =========================
 def get_ip_range():
-    result = subprocess.getoutput("ip a show wlan0")
-    ip_match = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", result)
+    cmds = ["ip route", "ifconfig", "ip a"]
+    ip = None
 
-    if not ip_match:
+    for c in cmds:
+        out = subprocess.getoutput(c)
+
+        match = re.search(r"src (\d+\.\d+\.\d+\.\d+)", out)
+        if not match:
+            match = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", out)
+
+        if match:
+            ip = match.group(1)
+            break
+
+    if not ip:
         print("[-] Cannot detect IP!")
         exit()
 
-    ip = ip_match.group(1)
-    print(f"[+] Your IP: {ip}")
+    print(f"[+] Device IP: {ip}")
 
-    network = ipaddress.IPv4Interface(ip + "/24").network
-    return str(network)
-
+    net = ipaddress.IPv4Interface(ip + "/24").network
+    return str(net)
 
 # =========================
-# 🔍 NETWORK SCAN
+# 🔍 SCAN NETWORK
 # =========================
 def scan_network(ip_range):
     nm = nmap.PortScanner()
-    print(f"\n[+] Scanning: {ip_range}\n")
-
     nm.scan(hosts=ip_range, arguments='-sn')
 
-    results = []
+    devices = []
 
     for host in nm.all_hosts():
         ip = host
         state = nm[host].state()
         mac = nm[host]['addresses'].get('mac', 'Unknown')
 
-        print("=================================")
-        print(f"IP   : {ip}")
-        print(f"State: {state}")
-        print(f"MAC  : {mac}")
+        devices.append((ip, mac))
 
-        results.append(f"{ip} | {state} | {mac}")
+    return devices
 
-    print("=================================")
+# =========================
+# 🔔 ALERT SYSTEM
+# =========================
+def check_devices(devices):
+    global KNOWN_DEVICES
 
-    # save file
-    with open("scan_result.txt", "w") as f:
-        f.write("\n".join(results))
+    for ip, mac in devices:
+        if mac != "Unknown" and mac not in KNOWN_DEVICES:
+            print(f"\n⚠️ NEW DEVICE DETECTED: {ip} | {mac}")
+            KNOWN_DEVICES.add(mac)
 
-    print("\n[✓] Saved to scan_result.txt")
+# =========================
+# 💾 SAVE LOG
+# =========================
+def save_log(devices):
+    with open("kmt_live_log.txt", "a") as f:
+        f.write(f"\n=== {datetime.now()} ===\n")
+        for ip, mac in devices:
+            f.write(f"{ip} | {mac}\n")
 
+# =========================
+# 🔁 LIVE MONITOR
+# =========================
+def live_monitor():
+    ip_range = get_ip_range()
+
+    print("\n[+] Starting Live Monitor... (Ctrl+C to stop)\n")
+
+    try:
+        while True:
+            devices = scan_network(ip_range)
+
+            os.system("clear")
+            logo()
+
+            print(f"[LIVE SCAN] {datetime.now()}")
+            print("=================================")
+
+            for ip, mac in devices:
+                print(f"IP: {ip} | MAC: {mac}")
+
+            print("=================================")
+
+            check_devices(devices)
+            save_log(devices)
+
+            time.sleep(5)
+
+    except KeyboardInterrupt:
+        print("\n[✓] Stopped Monitor")
 
 # =========================
 # 📋 MENU
 # =========================
 def menu():
     while True:
-        print("\n====== K M T PRO TOOL ======")
-        print("1. Auto Network Scan")
+        print("\n====== K M T ULTIMATE PRO ======")
+        print("1. Live Network Monitor")
         print("2. Exit")
 
-        choice = input("Select: ")
+        c = input("Select: ")
 
-        if choice == "1":
-            ip_range = get_ip_range()
-            scan_network(ip_range)
+        if c == "1":
+            live_monitor()
 
-        elif choice == "2":
+        elif c == "2":
             print("Bye 👋")
             break
 
         else:
-            print("Invalid option!")
-
+            print("Invalid!")
 
 # =========================
 # 🚀 RUN
